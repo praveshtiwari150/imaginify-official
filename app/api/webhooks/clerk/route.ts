@@ -9,8 +9,10 @@ import { createUser, deleteUser, updateUser } from "@/lib/actions/user.actions";
 
 export async function POST(req: Request) {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the webhook
-  const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
+  console.log("✅ Webhook triggered")
+  const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+  console.log(req)
   if (!WEBHOOK_SECRET) {
     throw new Error(
       "Please add WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local"
@@ -33,7 +35,7 @@ export async function POST(req: Request) {
   // Get the body
   const payload = await req.json();
   const body = JSON.stringify(payload);
-
+  console.log("📦 Raw payload:", body);
   // Create a new Svix instance with your secret.
   const wh = new Webhook(WEBHOOK_SECRET);
 
@@ -57,6 +59,8 @@ export async function POST(req: Request) {
   const { id } = evt.data;
   const eventType = evt.type;
 
+  console.log(`📢 Event received: ${eventType} | ID: ${id}`);
+
   // CREATE
   if (eventType === "user.created") {
     const { id, email_addresses, image_url, first_name, last_name, username } =
@@ -71,18 +75,27 @@ export async function POST(req: Request) {
       photo: image_url,
     };
 
-    const newUser = await createUser(user);
+    console.log("User to be created: ", user);
 
-    // Set public metadata
-    if (newUser) {
-      await clerkClient.users.updateUserMetadata(id, {
-        publicMetadata: {
-          userId: newUser._id,
-        },
-      });
+    try {
+      const newUser = await createUser(user);
+
+      // Set public metadata
+      if (newUser) {
+        await clerkClient.users.updateUserMetadata(id, {
+          publicMetadata: {
+            userId: newUser._id,
+          },
+        });
+      }
+
+      return NextResponse.json({ message: "OK", user: newUser });
     }
 
-    return NextResponse.json({ message: "OK", user: newUser });
+    catch (err) {
+      console.error("❌ Error while creating user:", err);
+      return new Response("Error creating user", { status: 500 });
+    }
   }
 
   // UPDATE
